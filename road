@@ -1,0 +1,47 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>Live Road Hazard Detection</title>
+    <link rel="stylesheet" href="st.css">
+</head>
+<body>
+    <header>
+        <h1>🛣️ RoadGuard AI</h1>
+        <p>Live Road Hazard Detection System</p>
+    </header>
+
+    <main>
+        <section class="panel">
+            <h2>Live Camera</h2>
+            <video id="camera" autoplay playsinline></video>
+
+            <div class="actions">
+                <button id="startBtn">Start Camera</button>
+                <button id="captureBtn">Detect Live Frame</button>
+            </div>
+
+            <p id="status">Camera is not running.</p>
+        </section>
+
+        <section class="panel">
+            <h2>Upload Road Image</h2>
+            <input type="file" id="fileInput"
+                   accept="image/*">
+            <button id="uploadBtn">Detect Image</button>
+        </section>
+
+        <section class="panel">
+            <h2>Detection Result</h2>
+            <img id="resultImage" alt="Detection result">
+            <h3>Detected Objects</h3>
+            <ul id="results"></ul>
+        </section>
+    </main>
+
+    <script src="fst.js"></script>
+</body>
+</html>
