@@ -1,89 +1,123 @@
 
+
 const camera = document.getElementById("camera");
 const statusText = document.getElementById("status");
 const resultImage = document.getElementById("resultImage");
 const resultsList = document.getElementById("results");
 
-// Replace this with your actual deployed backend URL
-const API_URL = "YOUR_BACKEND_URL/detect";
+let model = null;
+
+// Load AI model
+async function loadModel() {
+    if (model) return model;
+
+    statusText.textContent = "Loading AI model...";
+
+    try {
+        await tf.ready();
+        model = await cocoSsd.load();
+
+        statusText.textContent = "AI model ready!";
+        return model;
+
+    } catch (error) {
+        statusText.textContent = "AI model loading failed.";
+        throw error;
+    }
+}
 
 // Start Camera
 document.getElementById("startBtn").onclick = async () => {
     try {
+        statusText.textContent = "Starting camera...";
+
         const stream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: false
         });
 
         camera.srcObject = stream;
+        await camera.play();
+
         statusText.textContent = "Camera is running.";
+
+        await loadModel();
 
     } catch (error) {
         statusText.textContent =
-            "Camera access denied or unavailable.";
+            "Error: " + error.message;
     }
 };
 
-// Detect Image
-async function detectImage(blob) {
+// Draw detection boxes
+function drawResults(source, predictions) {
 
-    const formData = new FormData();
-    formData.append("image", blob, "road.jpg");
+    const canvas = document.createElement("canvas");
 
-    statusText.textContent = "Detecting objects...";
+    canvas.width = source.videoWidth || source.naturalWidth || source.width;
+    canvas.height = source.videoHeight || source.naturalHeight || source.height;
+
+    const ctx = canvas.getContext("2d");
+
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+
+    resultsList.innerHTML = "";
+
+    predictions.forEach(item => {
+
+        const [x, y, width, height] = item.bbox;
+
+        ctx.strokeStyle = "#00ff00";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, width, height);
+
+        ctx.fillStyle = "#00ff00";
+        ctx.font = "16px Arial";
+
+        ctx.fillText(
+            item.class + " " + Math.round(item.score * 100) + "%",
+            x,
+            Math.max(y - 5, 18)
+        );
+
+        const li = document.createElement("li");
+
+        li.textContent =
+            item.class + " - " +
+            Math.round(item.score * 100) +
+            "% confidence";
+
+        resultsList.appendChild(li);
+    });
+
+    if (predictions.length === 0) {
+        resultsList.innerHTML =
+            "<li>No supported objects detected.</li>";
+    }
+
+    resultImage.src = canvas.toDataURL("image/jpeg");
+}
+
+// Detect image or camera frame
+async function detectImage(source) {
 
     try {
-        const response = await fetch(API_URL, {
-            method: "POST",
-            body: formData
-        });
+        await loadModel();
 
-        // Read response as text first
-        const responseText = await response.text();
+        statusText.textContent = "Detecting objects...";
 
-        let data;
+        const predictions = await model.detect(source);
 
-        try {
-            data = JSON.parse(responseText);
-        } catch {
-            throw new Error(
-                "Backend returned HTML instead of JSON. Check your backend URL and server."
-            );
-        }
+        drawResults(source, predictions);
 
-        if (!response.ok) {
-            throw new Error(data.error || "Detection failed");
-        }
-
-        resultImage.src =
-            "data:image/jpeg;base64," + data.image;
-
-        resultsList.innerHTML = "";
-
-        if (!data.detections || data.detections.length === 0) {
-
-            resultsList.innerHTML =
-                "<li>No objects detected.</li>";
-
-        } else {
-
-            data.detections.forEach(item => {
-
-                const li = document.createElement("li");
-
-                li.textContent =
-                    `${item.name} — ${item.confidence}% confidence`;
-
-                resultsList.appendChild(li);
-            });
-        }
-
-        statusText.textContent = "Detection completed.";
+        statusText.textContent =
+            "Detection completed! " +
+            predictions.length + " objects detected.";
 
     } catch (error) {
 
         statusText.textContent =
-            "Error: " + error.message;
+            "Detection error: " + error.message;
 
         console.error(error);
     }
@@ -98,22 +132,7 @@ document.getElementById("captureBtn").onclick = () => {
         return;
     }
 
-    const canvas = document.createElement("canvas");
-
-    canvas.width = camera.videoWidth;
-    canvas.height = camera.videoHeight;
-
-    canvas.getContext("2d").drawImage(
-        camera, 0, 0, canvas.width, canvas.height
-    );
-
-    canvas.toBlob(blob => {
-
-        if (blob) {
-            detectImage(blob);
-        }
-
-    }, "image/jpeg");
+    detectImage(camera);
 };
 
 // Upload Image
@@ -122,11 +141,22 @@ document.getElementById("uploadBtn").onclick = () => {
     const file = document.getElementById("fileInput").files[0];
 
     if (!file) {
-
         statusText.textContent = "Choose an image first.";
         return;
     }
 
-    detectImage(file);
+    const image = new Image();
+
+    image.onload = () => {
+        detectImage(image);
+        URL.revokeObjectURL(image.src);
+    };
+
+    image.onerror = () => {
+        statusText.textContent = "Unable to load image.";
+        URL.revokeObjectURL(image.src);
+    };
+
+    image.src = URL.createObjectURL(file);
 };
 
